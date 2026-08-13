@@ -1,0 +1,6 @@
+id=pico4_matrix_region_switch
+name=Pico4 Matrix Region Switcher
+version=v1.0
+versionCode=1
+author=Horizon
+description=国区↔外区 Matrix 一键切换。点击⚡按钮切换区域，WebUI 查看状态。

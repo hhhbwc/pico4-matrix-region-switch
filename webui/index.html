@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Matrix 区域状态</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, 'Segoe UI', Roboto, sans-serif;
+  background: #1a1a2e;
+  color: #eee;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px;
+}
+.header {
+  text-align: center;
+  margin: 20px 0 30px;
+}
+.header h1 {
+  font-size: 22px;
+  font-weight: 700;
+  color: #e94560;
+  margin-bottom: 8px;
+}
+.header p {
+  font-size: 13px;
+  color: #888;
+}
+.status-card {
+  background: #16213e;
+  border-radius: 16px;
+  padding: 24px 30px;
+  text-align: center;
+  width: 100%;
+  max-width: 320px;
+  margin-bottom: 24px;
+  border: 1px solid #0f3460;
+}
+.status-label {
+  font-size: 13px;
+  color: #888;
+  margin-bottom: 8px;
+}
+#currentRegion {
+  font-size: 36px;
+  font-weight: 800;
+  letter-spacing: 2px;
+}
+#currentRegion.cn { color: #e94560; }
+#currentRegion.gl { color: #4ecca3; }
+#currentRegion.unknown { color: #888; }
+.region-tag {
+  display: inline-block;
+  font-size: 11px;
+  padding: 2px 10px;
+  border-radius: 10px;
+  margin-top: 6px;
+  background: #0f3460;
+  color: #888;
+}
+.info-card {
+  background: #16213e;
+  border-radius: 14px;
+  padding: 20px;
+  width: 100%;
+  max-width: 320px;
+  border: 1px solid #0f3460;
+  font-size: 13px;
+  line-height: 1.8;
+}
+.info-card .title {
+  color: #e94560;
+  font-weight: 700;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+.info-card .step {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-bottom: 6px;
+}
+.info-card .step-num {
+  background: #0f3460;
+  color: #4facfe;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.info-card .step-text {
+  color: #aaa;
+  padding-top: 2px;
+}
+.info-card .step-text strong {
+  color: #eee;
+}
+#statusMsg {
+  margin-top: 16px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  text-align: center;
+  width: 100%;
+  max-width: 320px;
+  display: none;
+  line-height: 1.5;
+}
+#statusMsg.info {
+  display: block;
+  background: rgba(79, 172, 254, 0.15);
+  color: #4facfe;
+  border: 1px solid rgba(79, 172, 254, 0.3);
+}
+.spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🌐 Matrix 区域切换</h1>
+  <p>Pico4 Matrix Region Switcher v1.0</p>
+</div>
+
+<div class="status-card">
+  <div class="status-label">当前区域</div>
+  <div id="currentRegion" class="unknown">—</div>
+  <div id="regionTag" class="region-tag">正在检测...</div>
+</div>
+
+<div id="statusMsg"></div>
+
+<div class="info-card">
+  <div class="title">⚡ 如何切换</div>
+  <div class="step">
+    <span class="step-num">1</span>
+    <span class="step-text">返回 Magisk Manager 模块列表</span>
+  </div>
+  <div class="step">
+    <span class="step-num">2</span>
+    <span class="step-text">找到本模块，点击 <strong>⚡ 按钮</strong></span>
+  </div>
+  <div class="step">
+    <span class="step-num">3</span>
+    <span class="step-text">每次点击：国区 ↔ 外区 来回切换</span>
+  </div>
+</div>
+
+<script>
+var MODULE = '/data/adb/modules/pico4_matrix_region_switch';
+var SWITCH = MODULE + '/switch.sh';
+
+function log(msg) { console.log('[MatrixSwitch]', msg); }
+
+function showMsg(text, type) {
+  var el = document.getElementById('statusMsg');
+  el.textContent = text;
+  el.className = type;
+}
+
+function hideMsg() {
+  document.getElementById('statusMsg').className = '';
+}
+
+function getStatus() {
+  log('Fetching status...');
+  showMsg('正在检测当前区域...', 'info');
+  Magisk.exec('su -c "sh ' + SWITCH + ' status 2>/dev/null"', function(code, stdout, stderr) {
+    log('Status result: ' + stdout);
+    var region = 'unknown';
+    var tag = '无法检测';
+    if (stdout.indexOf('cn') >= 0) {
+      region = 'cn';
+      tag = '🇨🇳 国区 Chinese';
+    } else if (stdout.indexOf('gl') >= 0) {
+      region = 'gl';
+      tag = '🌍 外区 Global';
+    }
+    var el = document.getElementById('currentRegion');
+    el.textContent = region === 'cn' ? '国区' : (region === 'gl' ? '外区' : '未知');
+    el.className = region;
+    document.getElementById('regionTag').textContent = tag;
+    hideMsg();
+  });
+}
+
+getStatus();
+</script>
+</body>
+</html>
