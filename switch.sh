@@ -3,6 +3,7 @@
 # Pico4 Matrix Region Switcher - switch.sh
 # 用法:
 #   sh switch.sh status   - 显示当前区域
+#   sh switch.sh toggle   - 在国区和外区之间切换
 #   sh switch.sh cn       - 切换到国区
 #   sh switch.sh gl       - 切换到外区
 # ==============================================
@@ -105,10 +106,34 @@ install_matrix() {
     return 0
 }
 
+toggle_region() {
+    local current target
+    current=$(get_current_region)
+    case "$current" in
+        cn) target="gl" ;;
+        gl) target="cn" ;;
+        *)
+            log "ERROR: Cannot determine current region; refusing to default to CN"
+            return 1
+            ;;
+    esac
+
+    log "Toggling $current -> $target"
+    if [ "$target" = "cn" ]; then
+        install_matrix "$MATRIX_CN" "$target"
+    else
+        install_matrix "$MATRIX_GL" "$target"
+    fi
+}
+
 # ==== MAIN ====
 case "$1" in
     status)
         echo "Current region: $(get_current_region)"
+        ;;
+    toggle)
+        require_root
+        toggle_region
         ;;
     cn)
         require_root
@@ -119,7 +144,7 @@ case "$1" in
         install_matrix "$MATRIX_GL" "gl"
         ;;
     *)
-        echo "Usage: sh $0 {status|cn|gl}"
+        echo "Usage: sh $0 {status|toggle|cn|gl}"
         exit 1
         ;;
 esac
