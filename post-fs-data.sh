@@ -7,16 +7,23 @@
 # ==============================================
 
 MODDIR=${0%/*}
-PATCHED_MD5="641c73778ca417e8551a3b8355b93777"
+EXPECTED_FINGERPRINT="Pico/Phoenix/PICOA8110:10/5.13.7/smartcm.1761755159:user/dev-keys"
+PATCHED_SERVICES_SHA256="d41ed85ae0769f7c4f12f568d68ea992ee80f3bef6ac669a1e0b905344af5df9"
 SYSTEM_JAR="/system/framework/services.jar"
 MOD_JAR="$MODDIR/system/framework/services.jar"
 
 if [ -f "$MOD_JAR" ]; then
-    CURRENT_MD5=$(md5sum "$SYSTEM_JAR" 2>/dev/null | awk '{print $1}')
-    if [ "$CURRENT_MD5" = "$PATCHED_MD5" ]; then
-        echo "[MatrixSwitch] services.jar already patched via magic mount"
+    fingerprint=$(getprop ro.build.fingerprint)
+    module_sha=$(sha256sum "$MOD_JAR" 2>/dev/null | awk '{print $1}')
+    current_sha=$(sha256sum "$SYSTEM_JAR" 2>/dev/null | awk '{print $1}')
+    if [ "$fingerprint" != "$EXPECTED_FINGERPRINT" ]; then
+        echo "[MatrixSwitch] WARNING: unsupported firmware fingerprint: $fingerprint"
+    elif [ "$module_sha" != "$PATCHED_SERVICES_SHA256" ]; then
+        echo "[MatrixSwitch] WARNING: module services.jar digest mismatch: $module_sha"
+    elif [ "$current_sha" = "$PATCHED_SERVICES_SHA256" ]; then
+        echo "[MatrixSwitch] services.jar patched via verified magic mount"
     else
-        echo "[MatrixSwitch] WARNING: services.jar mismatch (expected $PATCHED_MD5, got $CURRENT_MD5)"
+        echo "[MatrixSwitch] WARNING: services.jar mismatch (expected $PATCHED_SERVICES_SHA256, got $current_sha)"
         echo "[MatrixSwitch] Module may need reinstall or re-enable"
     fi
 fi
