@@ -33,6 +33,10 @@ fi
 
 PKG="com.bytedance.pico.matrix"
 STATE_FILE="$MODDIR/region.prop"
+COORD_DIR="/data/adb/pico4-coord"
+MATRIX_LOCK="$COORD_DIR/matrix-switch.lock"
+PAPER_SUPPRESS="$COORD_DIR/paper-autostart.suppress"
+EXPECTED_FINGERPRINT="Pico/Phoenix/PICOA8110:10/5.13.7/smartcm.1761755159:user/dev-keys"
 
 # 已安装 APK 的 SHA-256 哈希（从之前提取的 APK 计算）
 HASH_CN="63fe1f78e1cef07861397c45e1fe7a01eb4d6dd4d2eef6e5f971237636cc78b8"
@@ -76,19 +80,54 @@ require_root() {
     fi
 }
 
+require_compatible_firmware() {
+    local fingerprint
+    fingerprint=$(getprop ro.build.fingerprint)
+    if [ "$fingerprint" != "$EXPECTED_FINGERPRINT" ]; then
+        log "ERROR: unsupported firmware fingerprint: $fingerprint"
+        return 1
+    fi
+    return 0
+}
+
+begin_transition() {
+    mkdir -p "$COORD_DIR" || return 1
+    if [ -e "$MATRIX_LOCK" ]; then
+        log "ERROR: another Matrix transition is already active"
+        return 1
+    fi
+    if [ -e "$PAPER_SUPPRESS" ]; then
+        log "ERROR: Paper maintenance session is active"
+        return 1
+    fi
+    if [ "$(settings get global pico_power_coord_sleep_active 2>/dev/null)" = "1" ]; then
+        log "ERROR: V-Sleep display transaction is active"
+        return 1
+    fi
+    echo "pid=$$ started=$(date +%s)" > "$MATRIX_LOCK" || return 1
+    return 0
+}
+
+end_transition() {
+    rm -f "$MATRIX_LOCK"
+}
+
 install_matrix() {
     local apk="$1" target="$2"
     local current
+    require_compatible_firmware || return 1
+    begin_transition || return 1
     current=$(get_current_region)
     log "Current region: $current, target: $target"
 
     if [ "$current" = "$target" ]; then
         log "Already on $target region, no change needed."
+        end_transition
         return 0
     fi
 
     local tmp="/data/local/tmp/matrix_$target.apk"
-    cp -f "$apk" "$tmp" 2>/dev/null || { log "ERROR: Cannot copy APK"; return 1; }
+    cp -f "$apk" "$tmp" 2>/dev/null || { log "ERROR: Cannot copy APK"; end_transition; return 1; }
     chmod 644 "$tmp"
 
     log "Installing $target Matrix..."
@@ -97,12 +136,15 @@ install_matrix() {
     echo "$out" >> /data/local/tmp/matrix_install.log
     if ! echo "$out" | grep -qi "success"; then
         log "ERROR: Install failed: $out"
+        end_transition
         return 1
     fi
 
-    # 保存区域缓存
     save_region "$target"
-    log "SUCCESS: Switched to $target region"
+    settings put global pico_matrix_coord_generation "$(date +%s)" 2>/dev/null
+    settings put global pico_matrix_coord_state "reboot-required" 2>/dev/null
+    end_transition
+    log "SUCCESS: Switched to $target region; reboot required before VR use"
     return 0
 }
 
