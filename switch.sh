@@ -49,24 +49,37 @@ get_apk_path() {
     pm path "$PKG" 2>/dev/null | grep -o '/data/app/[^:]*/base.apk' | head -1
 }
 
-# 检测当前区域: 优先 SHA-256 哈希对比，失败则读缓存
+sha256_file() {
+    local path output digest
+    path="$1"
+    [ -f "$path" ] || return 1
+    output=$(/system/bin/toybox sha256sum -b "$path" 2>/dev/null) || return 1
+    set -- $output
+    digest="$1"
+    [ "${#digest}" -eq 64 ] || return 1
+    case "$digest" in
+        *[!0123456789abcdefABCDEF]*) return 1 ;;
+    esac
+    echo "$digest"
+}
+
 get_current_region() {
     local path apk_hash
     path=$(get_apk_path)
-    if [ -n "$path" ]; then
-        apk_hash=$(sha256sum "$path" 2>/dev/null | awk '{print $1}')
-        case "$apk_hash" in
-            "$HASH_CN") echo "cn"; return ;;
-            "$HASH_GL") echo "gl"; return ;;
-        esac
-    fi
-    # 哈希检测失败，读缓存
-    if [ -f "$STATE_FILE" ]; then
-        local cached
-        cached=$(grep -o 'region=[^ ]*' "$STATE_FILE" 2>/dev/null | cut -d= -f2)
-        case "$cached" in cn|gl) echo "$cached"; return ;; esac
-    fi
-    echo "unknown"
+    [ -n "$path" ] || { log "ERROR: Matrix APK path unavailable"; echo "unknown"; return; }
+    apk_hash=$(sha256_file "$path") || {
+        log "ERROR: cannot hash installed Matrix APK"
+        echo "unknown"
+        return
+    }
+    case "$apk_hash" in
+        "$HASH_CN") echo "cn" ;;
+        "$HASH_GL") echo "gl" ;;
+        *)
+            log "ERROR: unknown installed Matrix APK digest: $apk_hash"
+            echo "unknown"
+            ;;
+    esac
 }
 
 save_region() {
@@ -114,11 +127,33 @@ end_transition() {
 
 install_matrix() {
     local apk="$1" target="$2"
-    local current
+    local current payload_hash installed_path installed_hash
     require_compatible_firmware || return 1
+    [ -f "$apk" ] || { log "ERROR: target Matrix payload is missing: $apk"; return 1; }
+    case "$target" in
+        cn) payload_hash="$HASH_CN" ;;
+        gl) payload_hash="$HASH_GL" ;;
+        *) log "ERROR: invalid target region: $target"; return 1 ;;
+    esac
+    installed_hash=$(sha256_file "$apk") || {
+        log "ERROR: cannot hash target Matrix payload: $apk"
+        return 1
+    }
+    if [ "$installed_hash" != "$payload_hash" ]; then
+        log "ERROR: target payload digest mismatch: got $installed_hash expected $payload_hash"
+        return 1
+    fi
     begin_transition || return 1
     current=$(get_current_region)
     log "Current region: $current, target: $target"
+    case "$current" in
+        cn|gl) ;;
+        *)
+            log "ERROR: refusing to install with unknown current region"
+            end_transition
+            return 1
+            ;;
+    esac
 
     if [ "$current" = "$target" ]; then
         log "Already on $target region, no change needed."
@@ -140,11 +175,23 @@ install_matrix() {
         return 1
     fi
 
+    installed_path=$(get_apk_path)
+    installed_hash=$(sha256_file "$installed_path") || {
+        log "ERROR: cannot verify installed Matrix APK"
+        end_transition
+        return 1
+    }
+    if [ "$installed_hash" != "$payload_hash" ]; then
+        log "ERROR: installed APK digest mismatch: got $installed_hash expected $payload_hash"
+        end_transition
+        return 1
+    fi
+
     save_region "$target"
     settings put global pico_matrix_coord_generation "$(date +%s)" 2>/dev/null
     settings put global pico_matrix_coord_state "reboot-required" 2>/dev/null
     end_transition
-    log "SUCCESS: Switched to $target region; reboot required before VR use"
+    log "SUCCESS: Switched to $target region; verified digest $installed_hash; reboot required before VR use"
     return 0
 }
 

@@ -12,10 +12,20 @@ PATCHED_SERVICES_SHA256="d41ed85ae0769f7c4f12f568d68ea992ee80f3bef6ac669a1e0b905
 SYSTEM_JAR="/system/framework/services.jar"
 MOD_JAR="$MODDIR/system/framework/services.jar"
 
+sha256_file() {
+    local output digest
+    output=$(/system/bin/toybox sha256sum -b "$1" 2>/dev/null) || return 1
+    set -- $output
+    digest="$1"
+    [ "${#digest}" -eq 64 ] || return 1
+    case "$digest" in *[!0123456789abcdefABCDEF]*) return 1 ;; esac
+    echo "$digest"
+}
+
 if [ -f "$MOD_JAR" ]; then
     fingerprint=$(getprop ro.build.fingerprint)
-    module_sha=$(sha256sum "$MOD_JAR" 2>/dev/null | awk '{print $1}')
-    current_sha=$(sha256sum "$SYSTEM_JAR" 2>/dev/null | awk '{print $1}')
+    module_sha=$(sha256_file "$MOD_JAR")
+    current_sha=$(sha256_file "$SYSTEM_JAR")
     if [ "$fingerprint" != "$EXPECTED_FINGERPRINT" ]; then
         echo "[MatrixSwitch] WARNING: unsupported firmware fingerprint: $fingerprint"
     elif [ "$module_sha" != "$PATCHED_SERVICES_SHA256" ]; then

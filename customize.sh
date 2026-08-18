@@ -17,7 +17,17 @@ if [ "$(getprop ro.build.fingerprint)" != "$EXPECTED_FINGERPRINT" ]; then
     abort "Unsupported firmware: $(getprop ro.build.fingerprint)"
 fi
 
-current_sha=$(sha256sum "$SYSTEM_JAR" 2>/dev/null | awk '{print $1}')
+sha256_file() {
+    local output digest
+    output=$(/system/bin/toybox sha256sum -b "$1" 2>/dev/null) || return 1
+    set -- $output
+    digest="$1"
+    [ "${#digest}" -eq 64 ] || return 1
+    case "$digest" in *[!0123456789abcdefABCDEF]*) return 1 ;; esac
+    echo "$digest"
+}
+
+current_sha=$(sha256_file "$SYSTEM_JAR") || abort "Unable to hash services.jar"
 case "$current_sha" in
     "$STOCK_SERVICES_SHA256")
         ui_print "Verified original services.jar baseline"
