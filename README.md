@@ -8,7 +8,7 @@ Pico4 国区/外区 Matrix 一键切换 Magisk 模块。模块不再内置两个
 - `services.jar` 签名绕过补丁仍内置，**只支持 Pico OS 5.13.7 的指定 fingerprint**。
 - Matrix APK 按需下载到 `/data/adb/pico4_matrix_region_switch/cache`，已验证的缓存会复用。
 - 下载失败、GitHub Release 不可访问、哈希不匹配或 APK 不是已知版本时，脚本会拒绝安装。
-- 设备必须能访问 GitHub，并有至少约 250 MB 可用空间（下载、临时文件和安装期间会同时占用空间）。设备还需要 `curl` 或 `wget` 等 HTTPS 下载器。
+- 设备必须能访问 GitHub，并有至少约 250 MB 可用空间（下载、临时文件和安装期间会同时占用空间）。模块自带 arm64 HTTPS 下载器和 CA 证书，PICO 4 的 arm64 设备无需另行安装 `curl` 或 `wget`。
 - 切换期间会设置 `pico_matrix_coord_state=transitioning`；如果 V-Sleep 正在运行，脚本会先请求它恢复显示/CPU 快照，等待进入 `idle` 后才继续。切换完成后需要重启。
 
 ## 下载源与完整性校验
@@ -29,7 +29,7 @@ Release 资产是静态 APK 文件；脚本使用 HTTPS 跟随重定向并在安
   `Pico/Phoenix/PICOA8110:10/5.13.7/smartcm.1761755159:user/dev-keys`
 - 模块内 `services.jar` 必须在重启后通过 Magic Mount 生效。
 - 系统至少有一个已安装且哈希匹配的 CN/Global Matrix APK；未知版本不会被自动猜测。
-- 系统有 `curl` 或 `wget`。若设备没有下载器，可手动把经过校验的文件放入缓存目录，命名为 `matrix_cn.apk` 或 `matrix_gl.apk`。
+- 模块内置适用于 `arm64-v8a` 的 HTTPS 下载器；其他架构设备必须手动把经过校验的文件放入缓存目录，命名为 `matrix_cn.apk` 或 `matrix_gl.apk`。
 
 ### 安装与切换
 
@@ -69,16 +69,18 @@ Pico4_MatrixRegionSwitch/
 ├── post-fs-data.sh
 ├── region.prop
 ├── webui/index.html
+├── bin/matrix-download
+├── bin/cacert.pem
 └── system/framework/services.jar
 ```
 
 ## 构建
 
 ```bash
-7z a -tzip ../Pico4_MatrixRegionSwitch_v1.2.zip * -xr!META-INF -xr!common
+7z a -tzip ../Pico4_MatrixRegionSwitch_v1.3.zip *
 ```
 
-构建包只包含脚本、WebUI、元数据和 `services.jar`，不包含 Matrix APK。
+构建包包含脚本、WebUI、元数据、arm64 HTTPS 下载器、CA 证书和 `services.jar`，不包含两个大型 Matrix APK。
 
 ## License
 

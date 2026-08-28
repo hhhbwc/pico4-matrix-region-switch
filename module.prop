@@ -1,6 +1,6 @@
 id=pico4_matrix_region_switch
 name=Pico4 Matrix Region Switcher
-version=v1.2
-versionCode=3
+version=v1.4
+versionCode=5
 author=Horizon
-description=国区↔外区 Matrix 切换；APK 首次从 GitHub Releases 下载并校验 SHA-256。
+description=国区↔外区 Matrix 切换；内置 arm64 HTTPS 下载器、CA 证书并校验 SHA-256。

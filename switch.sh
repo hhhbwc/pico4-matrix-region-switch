@@ -112,9 +112,16 @@ region_values() {
 }
 
 run_download() {
-    local url out rc
+    local url out rc downloader ca_bundle
     url="$1"
     out="$2"
+    downloader="$MODDIR/bin/matrix-download"
+    ca_bundle="$MODDIR/bin/cacert.pem"
+    if [ -x "$downloader" ]; then
+        [ -f "$ca_bundle" ] || { log "ERROR: bundled CA certificate is missing"; return 127; }
+        "$downloader" --fail --location --retry 2 --connect-timeout 20 --max-time 1800 --cacert "$ca_bundle" --output "$out" "$url" 2>&1
+        return $?
+    fi
     if command -v curl >/dev/null 2>&1; then
         curl -fL --retry 2 --connect-timeout 20 --max-time 1800 -o "$out" "$url" 2>&1
         return $?
@@ -131,7 +138,7 @@ run_download() {
         toybox wget -O "$out" "$url" 2>&1
         return $?
     fi
-    log "ERROR: no curl/wget downloader available; install one or place a verified APK in $CACHE_DIR"
+    log "ERROR: bundled downloader unavailable; install curl/wget or place a verified APK in $CACHE_DIR"
     return 127
 }
 
@@ -156,7 +163,7 @@ ensure_cached() {
     log "Downloading $REGION_NAME Matrix APK from GitHub Releases"
     if ! run_download "$url" "$part"; then
         rm -f "$part"
-        log "ERROR: download failed; check GitHub access or install curl/wget"
+        log "ERROR: download failed; check GitHub access, bundled CA data, or the APK cache"
         return 1
     fi
     digest=$(sha256_file "$part" 2>/dev/null)
