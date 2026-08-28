@@ -117,8 +117,12 @@ run_download() {
     local url out downloader ca_bundle
     url="$1"
     out="$2"
-    downloader="$MODDIR/bin/matrix-download"
-    ca_bundle="$MODDIR/bin/cacert.pem"
+    downloader=/system/bin/matrix-download
+    ca_bundle=/system/etc/pico4-matrix/cacert.pem
+    if [ ! -x "$downloader" ] || [ ! -f "$ca_bundle" ]; then
+        downloader="$MODDIR/system/bin/matrix-download"
+        ca_bundle="$MODDIR/system/etc/pico4-matrix/cacert.pem"
+    fi
     if [ -x "$downloader" ]; then
         [ -f "$ca_bundle" ] || { log "ERROR: bundled CA certificate is missing"; return 127; }
         "$downloader" --fail --location --retry 2 --connect-timeout 20 --max-time 1800 --cacert "$ca_bundle" --output "$out" "$url" 2>&1

@@ -47,8 +47,8 @@ fi
 
 # Run customize.sh if exists
 if [ -f "$MODPATH/customize.sh" ]; then
-  chmod 755 "$MODPATH/customize.sh" "$MODPATH/action.sh" "$MODPATH/post-fs-data.sh" "$MODPATH/switch.sh" "$MODPATH/bin/matrix-download"
-  chmod 644 "$MODPATH/bin/cacert.pem"
+  chmod 755 "$MODPATH/customize.sh" "$MODPATH/action.sh" "$MODPATH/post-fs-data.sh" "$MODPATH/switch.sh" "$MODPATH/system/bin/matrix-download"
+  chmod 644 "$MODPATH/system/etc/pico4-matrix/cacert.pem"
   . "$MODPATH/customize.sh"
 fi
 

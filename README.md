@@ -1,6 +1,6 @@
 # Pico4 Matrix Region Switch
 
-Pico4 国区/外区 Matrix 一键切换 Magisk 模块。模块不再内置两个大型 APK；首次切换目标区域时优先从 Google Drive 下载，失败后自动切换到 GitHub Releases，并在安装前用固定 SHA-256 校验。
+Pico4 国区/外区 Matrix 一键切换 Magisk 模块。模块不再内置两个大型 APK；首次切换目标区域时优先从 Google Drive 下载，失败后自动切换到 GitHub Releases，并在安装前用固定 SHA-256 校验。下载器安装到 Magisk 的 system 挂载路径，避免模块私有目录的执行限制。
 
 ## 功能与限制
 
@@ -69,15 +69,15 @@ Pico4_MatrixRegionSwitch/
 ├── post-fs-data.sh
 ├── region.prop
 ├── webui/index.html
-├── bin/matrix-download
-├── bin/cacert.pem
+├── system/bin/matrix-download
+├── system/etc/pico4-matrix/cacert.pem
 └── system/framework/services.jar
 ```
 
 ## 构建
 
 ```bash
-7z a -tzip ../Pico4_MatrixRegionSwitch_v1.5.zip *
+7z a -tzip ../Pico4_MatrixRegionSwitch_v1.6.zip *
 ```
 
 构建包包含脚本、WebUI、元数据、arm64 HTTPS 下载器、CA 证书和 `services.jar`，不包含两个大型 Matrix APK。
