@@ -1,22 +1,22 @@
 # Pico4 Matrix Region Switch
 
-Pico4 国区/外区 Matrix 一键切换 Magisk 模块。模块不再内置两个大型 APK；首次切换目标区域时从 GitHub Releases 下载，并在安装前用固定 SHA-256 校验。
+Pico4 国区/外区 Matrix 一键切换 Magisk 模块。模块不再内置两个大型 APK；首次切换目标区域时优先从 Google Drive 下载，失败后自动切换到 GitHub Releases，并在安装前用固定 SHA-256 校验。
 
 ## 功能与限制
 
 - Magisk Manager 的 Action 按钮执行 CN/Global 来回切换。
 - `services.jar` 签名绕过补丁仍内置，**只支持 Pico OS 5.13.7 的指定 fingerprint**。
 - Matrix APK 按需下载到 `/data/adb/pico4_matrix_region_switch/cache`，已验证的缓存会复用。
-- 下载失败、GitHub Release 不可访问、哈希不匹配或 APK 不是已知版本时，脚本会拒绝安装。
-- 设备必须能访问 GitHub，并有至少约 250 MB 可用空间（下载、临时文件和安装期间会同时占用空间）。模块自带 arm64 HTTPS 下载器和 CA 证书，PICO 4 的 arm64 设备无需另行安装 `curl` 或 `wget`。
+- Google Drive 下载失败或哈希不匹配时自动尝试 GitHub Releases；两个来源都失败、哈希不匹配或 APK 不是已知版本时，脚本会拒绝安装。
+- 设备必须能访问 Google Drive 或 GitHub；脚本会先试 Google Drive，失败后试 GitHub，并需要至少约 250 MB 可用空间（下载、临时文件和安装期间会同时占用空间）。模块自带 arm64 HTTPS 下载器和 CA 证书，PICO 4 的 arm64 设备无需另行安装 `curl` 或 `wget`。
 - 切换期间会设置 `pico_matrix_coord_state=transitioning`；如果 V-Sleep 正在运行，脚本会先请求它恢复显示/CPU 快照，等待进入 `idle` 后才继续。切换完成后需要重启。
 
 ## 下载源与完整性校验
 
-| 区域 | GitHub Release 资产 | 期望 SHA-256 |
-|---|---|---|
-| CN | [Matrix_CN.apk](https://github.com/hhhbwc/pico4-matrix-region-switch/releases/download/v1.0/Matrix_CN.apk) | `63fe1f78e1cef07861397c45e1fe7a01eb4d6dd4d2eef6e5f971237636cc78b8` |
-| Global | [Matrix_GL.apk](https://github.com/hhhbwc/pico4-matrix-region-switch/releases/download/v1.0/Matrix_GL.apk) | `1f966e482f9341f05ae7668e58ec6cbb55b71271dd54892df96c0b2ce487a0ee` |
+| 区域 | Google Drive（优先） | GitHub Release（备用） | 期望 SHA-256 |
+|---|---|---|---|---|
+| CN | `1v2StnwhAXRrRb_60EyllwD81UoNj1Lo4` | [Matrix_CN.apk](https://github.com/hhhbwc/pico4-matrix-region-switch/releases/download/v1.0/Matrix_CN.apk) | `63fe1f78e1cef07861397c45e1fe7a01eb4d6dd4d2eef6e5f971237636cc78b8` |
+| Global | `1LOdGi_iCVQRlcGkYtxzUwEPn10xgkkOs` | [Matrix_GL.apk](https://github.com/hhhbwc/pico4-matrix-region-switch/releases/download/v1.0/Matrix_GL.apk) | `1f966e482f9341f05ae7668e58ec6cbb55b71271dd54892df96c0b2ce487a0ee` |
 
 Release 资产是静态 APK 文件；脚本使用 HTTPS 跟随重定向并在安装前校验 SHA-256。
 
@@ -77,7 +77,7 @@ Pico4_MatrixRegionSwitch/
 ## 构建
 
 ```bash
-7z a -tzip ../Pico4_MatrixRegionSwitch_v1.3.zip *
+7z a -tzip ../Pico4_MatrixRegionSwitch_v1.5.zip *
 ```
 
 构建包包含脚本、WebUI、元数据、arm64 HTTPS 下载器、CA 证书和 `services.jar`，不包含两个大型 Matrix APK。

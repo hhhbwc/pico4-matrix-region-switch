@@ -18,8 +18,10 @@ CACHE_DIR="/data/adb/pico4_matrix_region_switch/cache"
 HANDOFF_TIMEOUT=30
 EXPECTED_FINGERPRINT="Pico/Phoenix/PICOA8110:10/5.13.7/smartcm.1761755159:user/dev-keys"
 
-URL_CN="https://github.com/hhhbwc/pico4-matrix-region-switch/releases/download/v1.0/Matrix_CN.apk"
-URL_GL="https://github.com/hhhbwc/pico4-matrix-region-switch/releases/download/v1.0/Matrix_GL.apk"
+URL_GOOGLE_CN="https://drive.usercontent.google.com/download?id=1v2StnwhAXRrRb_60EyllwD81UoNj1Lo4&export=download&confirm=t"
+URL_GOOGLE_GL="https://drive.usercontent.google.com/download?id=1LOdGi_iCVQRlcGkYtxzUwEPn10xgkkOs&export=download&confirm=t"
+URL_GITHUB_CN="https://github.com/hhhbwc/pico4-matrix-region-switch/releases/download/v1.0/Matrix_CN.apk"
+URL_GITHUB_GL="https://github.com/hhhbwc/pico4-matrix-region-switch/releases/download/v1.0/Matrix_GL.apk"
 HASH_CN="63fe1f78e1cef07861397c45e1fe7a01eb4d6dd4d2eef6e5f971237636cc78b8"
 HASH_GL="1f966e482f9341f05ae7668e58ec6cbb55b71271dd54892df96c0b2ce487a0ee"
 
@@ -105,14 +107,14 @@ end_transition() { rm -f "$MATRIX_LOCK"; }
 
 region_values() {
     case "$1" in
-        cn) REGION_HASH="$HASH_CN"; REGION_NAME=CN ;;
-        gl) REGION_HASH="$HASH_GL"; REGION_NAME=GL ;;
+        cn) REGION_HASH="$HASH_CN"; REGION_NAME=CN; GOOGLE_URL="$URL_GOOGLE_CN"; GITHUB_URL="$URL_GITHUB_CN" ;;
+        gl) REGION_HASH="$HASH_GL"; REGION_NAME=GL; GOOGLE_URL="$URL_GOOGLE_GL"; GITHUB_URL="$URL_GITHUB_GL" ;;
         *) return 1 ;;
     esac
 }
 
 run_download() {
-    local url out rc downloader ca_bundle
+    local url out downloader ca_bundle
     url="$1"
     out="$2"
     downloader="$MODDIR/bin/matrix-download"
@@ -130,23 +132,14 @@ run_download() {
         wget -O "$out" "$url" 2>&1
         return $?
     fi
-    if command -v busybox >/dev/null 2>&1 && busybox wget --help >/dev/null 2>&1; then
-        busybox wget -O "$out" "$url" 2>&1
-        return $?
-    fi
-    if toybox wget --help >/dev/null 2>&1; then
-        toybox wget -O "$out" "$url" 2>&1
-        return $?
-    fi
-    log "ERROR: bundled downloader unavailable; install curl/wget or place a verified APK in $CACHE_DIR"
+    log "ERROR: no usable HTTPS downloader available"
     return 127
 }
 
 ensure_cached() {
-    local target cache part url digest
+    local target cache part digest source url
     target="$1"
     region_values "$target" || return 1
-    case "$target" in cn) url="$URL_CN" ;; gl) url="$URL_GL" ;; esac
     cache="$CACHE_DIR/matrix_${target}.apk"
     part="$cache.part"
     mkdir -p "$CACHE_DIR" || { log "ERROR: cannot create cache directory: $CACHE_DIR"; return 1; }
@@ -158,24 +151,31 @@ ensure_cached() {
         return 0
     fi
     [ -e "$cache" ] && rm -f "$cache"
-    rm -f "$part"
 
-    log "Downloading $REGION_NAME Matrix APK from GitHub Releases"
-    if ! run_download "$url" "$part"; then
+    for source in "Google Drive" "GitHub Releases"; do
+        case "$source" in
+            "Google Drive") url="$GOOGLE_URL" ;;
+            "GitHub Releases") url="$GITHUB_URL" ;;
+        esac
         rm -f "$part"
-        log "ERROR: download failed; check GitHub access, bundled CA data, or the APK cache"
-        return 1
-    fi
-    digest=$(sha256_file "$part" 2>/dev/null)
-    if [ "$digest" != "$REGION_HASH" ]; then
+        log "Downloading $REGION_NAME Matrix APK from $source"
+        if ! run_download "$url" "$part"; then
+            rm -f "$part"
+            log "WARNING: $source download failed; trying next source"
+            continue
+        fi
+        digest=$(sha256_file "$part" 2>/dev/null)
+        if [ "$digest" = "$REGION_HASH" ]; then
+            mv -f "$part" "$cache" || { rm -f "$part"; log "ERROR: cannot commit APK cache"; return 1; }
+            CACHED_APK="$cache"
+            log "Downloaded and verified $REGION_NAME Matrix APK from $source"
+            return 0
+        fi
         rm -f "$part"
-        log "ERROR: downloaded $REGION_NAME APK hash mismatch: got ${digest:-unreadable}, expected $REGION_HASH"
-        log "The GitHub asset may be unavailable, incomplete, or a different APK build"
-        return 1
-    fi
-    mv -f "$part" "$cache" || { rm -f "$part"; log "ERROR: cannot commit APK cache"; return 1; }
-    CACHED_APK="$cache"
-    log "Downloaded and verified $REGION_NAME Matrix APK"
+        log "WARNING: $source returned invalid $REGION_NAME APK hash: got ${digest:-unreadable}, expected $REGION_HASH"
+    done
+    log "ERROR: both Google Drive and GitHub Releases downloads failed"
+    return 1
 }
 
 install_matrix() {
