@@ -7,7 +7,14 @@
 
 export PATH=/system/bin:/system/xbin:/sbin:/vendor/bin:/system/sbin:$PATH
 
-MODDIR=/data/adb/modules/pico4_matrix_region_switch
+MODID=pico4_matrix_region_switch
+MODDIR=/data/adb/modules/$MODID
+for candidate in "/data/adb/modules/$MODID" "/data/adb/modules_update/$MODID"; do
+    if [ -x "$candidate/switch.sh" ] || [ -f "$candidate/switch.sh" ]; then
+        MODDIR="$candidate"
+        break
+    fi
+done
 SWITCH="$MODDIR/switch.sh"
 LOG="/data/local/tmp/matrix_action.log"
 
@@ -16,6 +23,11 @@ echo "pwd=$(pwd)" >> "$LOG"
 
 # Let switch.sh detect and toggle the region itself. Capture its output for the log,
 # but preserve the real exit status so Magisk cannot treat a refusal as success.
+if [ ! -f "$SWITCH" ]; then
+    echo "ERROR: switch.sh not found at $SWITCH" >> "$LOG"
+    echo "❌ 切换失败：找不到 switch.sh，日志: $LOG"
+    exit 1
+fi
 RESULT=$(sh "$SWITCH" toggle 2>&1)
 STATUS=$?
 echo "RESULT=$RESULT" >> "$LOG"

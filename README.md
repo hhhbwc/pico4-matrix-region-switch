@@ -1,107 +1,84 @@
 # Pico4 Matrix Region Switch
 
-Pico4 国区/外区 Matrix 一键切换的 Magisk 模块。
+Pico4 国区/外区 Matrix 一键切换 Magisk 模块。模块不再内置两个大型 APK；首次切换目标区域时从 GitHub Releases 下载，并在安装前用固定 SHA-256 校验。
 
-## 背景
+## 功能与限制
 
-Pico4 的 Matrix（应用商店/系统桌面）分国区（CN）和外区（Global）两个版本，不同版本对应不同地区的服务生态。但系统限制同一版本号只能装一个，手动切换需要卸载重装、找 APK、打补丁，非常麻烦。
+- Magisk Manager 的 Action 按钮执行 CN/Global 来回切换。
+- `services.jar` 签名绕过补丁仍内置，**只支持 Pico OS 5.13.7 的指定 fingerprint**。
+- Matrix APK 按需下载到 `/data/adb/pico4_matrix_region_switch/cache`，已验证的缓存会复用。
+- 下载失败、GitHub Release 不可访问、哈希不匹配或 APK 不是已知版本时，脚本会拒绝安装。
+- 设备必须能访问 GitHub，并有至少约 250 MB 可用空间（下载、临时文件和安装期间会同时占用空间）。设备还需要 `curl` 或 `wget` 等 HTTPS 下载器。
+- 切换期间会设置 `pico_matrix_coord_state=transitioning`；如果 V-Sleep 正在运行，脚本会先请求它恢复显示/CPU 快照，等待进入 `idle` 后才继续。切换完成后需要重启。
 
-这个模块让你：
-- **💡 一键切换**：在 Magisk Manager 里点 ⚡ 按钮，国区↔外区来回切
-- **🔓 签名绕过**：内置 patched `services.jar`，突破 Pico 的签名验证限制
-- **📦 自带 APK**：模块内置国区/外区两版 Matrix，无需手动下载
+## 下载源与完整性校验
 
-## 原理
+| 区域 | GitHub Release 资产 | 期望 SHA-256 |
+|---|---|---|
+| CN | [Matrix_CN.apk](https://github.com/hhhbwc/pico4-matrix-region-switch/releases/download/v1.0/Matrix_CN.apk) | `63fe1f78e1cef07861397c45e1fe7a01eb4d6dd4d2eef6e5f971237636cc78b8` |
+| Global | [Matrix_GL.apk](https://github.com/hhhbwc/pico4-matrix-region-switch/releases/download/v1.0/Matrix_GL.apk) | `1f966e482f9341f05ae7668e58ec6cbb55b71271dd54892df96c0b2ce487a0ee` |
 
-### 三层结构
-
-```
-┌─────────────────────────────────────────────────────────┐
-│  Magisk Manager (用户界面)                              │
-│  ⚡ 按钮 → action.sh → switch.sh cn/gl                  │
-│  WebUI  → index.html (状态查看)                         │
-├─────────────────────────────────────────────────────────┤
-│  Magisk Magic Mount (开机自动)                          │
-│  /data/adb/modules/.../system/framework/services.jar    │
-│          ↓ mount --bind (透明覆盖)                       │
-│  /system/framework/services.jar (签名绕过补丁)          │
-├─────────────────────────────────────────────────────────┤
-│  switch.sh (核心切换逻辑)                                │
-│  1. SHA-256 检测已安装 APK 确定当前区域                  │
-│  2. pm install -r -d 安装另一个区的 APK                 │
-│  3. 更新 region.prop 缓存                               │
-└─────────────────────────────────────────────────────────┘
-```
-
-### 签名绕过
-
-Pico 系统在 `services.jar` 中实现了签名校验（`IPackageManagerSmtExBase`），安装 Matrix 时会检查签名是否与系统预置一致。patcher 工具的 `services.jar` 补丁修改了 `IExtPackageManagerService.skipSigningCheck()` 方法，使其放行特定公钥哈希的 APK。
-
-模块内置的 `services.jar` 对应 Pico OS 5.13.7，其他版本请自行从 patcher 工具提取对应版本。
-
-### 区域检测
-
-`switch.sh status` 通过比较已安装 Matrix APK 的 SHA-256 哈希来判断当前处于哪个区域：
-
-| 哈希值 | 区域 |
-|--------|------|
-| `63fe1f78e1cef07861397c45e1fe7a01eb4d6dd4d2eef6e5f971237636cc78b8` | 国区 |
-| `1f966e482f9341f05ae7668e58ec6cbb55b71271dd54892df96c0b2ce487a0ee` | 外区 |
+Release 资产是静态 APK 文件；脚本使用 HTTPS 跟随重定向并在安装前校验 SHA-256。
 
 ## 使用方法
 
 ### 前置条件
-- Pico4 已 root（Magisk）
-- 系统版本 **5.13.7**（其他版本需自行替换 services.jar）
 
-### 安装
-1. 下载 Releases 页面的 zip
-2. Magisk Manager → 模块 → 从本地安装
-3. 重启
+- Pico4 已 root，并安装 Magisk。
+- 系统 fingerprint 必须是：
+  `Pico/Phoenix/PICOA8110:10/5.13.7/smartcm.1761755159:user/dev-keys`
+- 模块内 `services.jar` 必须在重启后通过 Magic Mount 生效。
+- 系统至少有一个已安装且哈希匹配的 CN/Global Matrix APK；未知版本不会被自动猜测。
+- 系统有 `curl` 或 `wget`。若设备没有下载器，可手动把经过校验的文件放入缓存目录，命名为 `matrix_cn.apk` 或 `matrix_gl.apk`。
 
-### 切换区域
-- **⚡ 一键切换**：Magisk Manager → 模块 → 点模块卡片的 ⚡ 按钮
-- 每次点击：国区 ↔ 外区 来回切换
+### 安装与切换
 
-### 手动切换
+1. 下载模块 ZIP，在 Magisk 中从本地安装并重启。
+2. 在模块卡片点击 Action 按钮，或运行：
+
 ```bash
 adb shell su -c "sh /data/adb/modules/pico4_matrix_region_switch/switch.sh status"
 adb shell su -c "sh /data/adb/modules/pico4_matrix_region_switch/switch.sh cn"
 adb shell su -c "sh /data/adb/modules/pico4_matrix_region_switch/switch.sh gl"
 ```
 
+首次切换某个区域会下载约 90 MB 的 APK。成功后需要重启设备，再启动 VR 应用。日志位置：
+
+- `/data/local/tmp/matrix_action.log`
+- `/data/local/tmp/matrix_install.log`
+
+### 手动缓存与恢复
+
+将已验证的 APK 放入以下路径即可跳过下载：
+
+```text
+/data/adb/pico4_matrix_region_switch/cache/matrix_cn.apk
+/data/adb/pico4_matrix_region_switch/cache/matrix_gl.apk
+```
+
+脚本每次使用缓存前都会重新计算 SHA-256。下载中断产生的 `.part` 文件会被清理；可以删除整个 `cache` 目录后重试。不要修改脚本中的哈希值来绕过校验。
+
 ## 文件结构
 
-```
+```text
 Pico4_MatrixRegionSwitch/
-├── module.prop              # 模块元信息
-├── customize.sh             # 安装脚本
-├── action.sh                # ⚡ 按钮（来回切换）
-├── switch.sh                # 核心切换脚本
-├── post-fs-data.sh          # 开机校验
-├── region.prop              # 区域缓存
-├── webui/
-│   └── index.html           # WebUI 状态页
-└── system/
-    ├── framework/
-    │   └── services.jar     # 签名绕过补丁 (5.13.7)
-    └── etc/matrix/
-        ├── Matrix_CN.apk    # 国区 9.9.9
-        └── Matrix_GL.apk    # 外区 9.9.9
+├── module.prop
+├── customize.sh
+├── action.sh
+├── switch.sh
+├── post-fs-data.sh
+├── region.prop
+├── webui/index.html
+└── system/framework/services.jar
 ```
 
 ## 构建
 
 ```bash
-# 打包模块
-cd Pico4_MatrixRegionSwitch
-zip -r ../Pico4_Matrix_Region_Switcher.zip * -x "common/*"
+7z a -tzip ../Pico4_MatrixRegionSwitch_v1.2.zip * -xr!META-INF -xr!common
 ```
 
-## 致谢
-
-- [P4_OS_527-OS_5110_OR_MAGISK_SU_MATRIX_PATCHER](https://github.com/) - 原始 patcher 工具，提供 services.jar 补丁和 APK
-- Magisk 开源社区
+构建包只包含脚本、WebUI、元数据和 `services.jar`，不包含 Matrix APK。
 
 ## License
 
