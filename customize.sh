@@ -6,7 +6,7 @@ POSTFSDATA=true
 LATESTARTSERVICE=false
 
 ui_print "======================================"
-ui_print " Pico4 Matrix Region Switcher v1.6"
+ui_print " Pico4 Matrix Region Switcher v1.7"
 ui_print "======================================"
 EXPECTED_FINGERPRINT="Pico/Phoenix/PICOA8110:10/5.13.7/smartcm.1761755159:user/dev-keys"
 STOCK_SERVICES_SHA256="bca28757d42e6198a332db77c024c77e2ec66cf1183fbba8a6c47d0e2d7b0125"
