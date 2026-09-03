@@ -1,6 +1,6 @@
 id=pico4_matrix_region_switch
 name=Pico4 Matrix Region Switcher
-version=v1.6
-versionCode=7
+version=v1.7
+versionCode=8
 author=Horizon
 description=国区↔外区 Matrix 切换；Google Drive 优先、GitHub 备用，内置 arm64 下载器。
