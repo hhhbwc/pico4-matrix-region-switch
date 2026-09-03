@@ -220,7 +220,7 @@ toggle_region() {
     local current target
     current=$(get_current_region)
     case "$current" in cn) target=gl ;; gl) target=cn ;; *) log "ERROR: Cannot determine current region; refusing to default to CN"; return 1 ;; esac
-    install_matrix "$MATRIX_UNUSED" "$target"
+    install_matrix "" "$target"
 }
 
 case "$1" in
