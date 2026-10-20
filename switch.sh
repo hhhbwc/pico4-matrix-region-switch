@@ -16,7 +16,6 @@ PAPER_SUPPRESS="$COORD_DIR/paper-autostart.suppress"
 MATRIX_INTENT="$COORD_DIR/matrix-switch.intent"
 CACHE_DIR="/data/adb/pico4_matrix_region_switch/cache"
 HANDOFF_TIMEOUT=30
-EXPECTED_FINGERPRINT="Pico/Phoenix/PICOA8110:10/5.13.7/smartcm.1761755159:user/dev-keys"
 
 URL_GOOGLE_CN="https://drive.usercontent.google.com/download?id=1v2StnwhAXRrRb_60EyllwD81UoNj1Lo4&export=download&confirm=t"
 URL_GOOGLE_GL="https://drive.usercontent.google.com/download?id=1LOdGi_iCVQRlcGkYtxzUwEPn10xgkkOs&export=download&confirm=t"
@@ -59,27 +58,59 @@ require_root() {
     [ "$(id -u)" = 0 ] || { log "ERROR: 需要 root, 请用 su 运行"; return 1; }
 }
 
+versions_lookup() {
+    local v h
+    [ -r "$MODDIR/versions.conf" ] || return 1
+    while read -r v h; do
+        case "$v" in ''|'#'*) continue ;; esac
+        [ "$v" = "$1" ] && { echo "$h"; return 0; }
+    done < "$MODDIR/versions.conf"
+    return 1
+}
+
 require_compatible_firmware() {
-    local fingerprint
-    fingerprint=$(getprop ro.build.fingerprint)
-    [ "$fingerprint" = "$EXPECTED_FINGERPRINT" ] && return 0
-    log "ERROR: unsupported firmware fingerprint: $fingerprint"
+    local os expected
+    os=$(getprop ro.build.display.id)
+    expected=$(versions_lookup "$os") || { log "ERROR: unsupported PICO OS: $os; see $MODDIR/versions.conf"; return 1; }
+    log "PICO OS $os -> services.jar $expected"
+}
+
+require_patched_framework() {
+    local os expected digest
+    os=$(getprop ro.build.display.id)
+    expected=$(versions_lookup "$os") || { log "ERROR: unsupported PICO OS: $os"; return 1; }
+    digest=$(sha256_file /system/framework/services.jar) || { log "ERROR: cannot hash /system/framework/services.jar"; return 1; }
+    [ "$digest" = "$expected" ] && return 0
+    log "ERROR: effective services.jar is $digest, expected $expected for $os; reboot after installing/enabling the module (see /data/local/tmp/matrix_boot.log)"
     return 1
 }
 
 begin_transition() {
+    local lock_pid
     mkdir -p "$COORD_DIR" || return 1
-    if [ -e "$MATRIX_LOCK" ]; then log "ERROR: another Matrix transition is already active"; return 1; fi
+    if [ -e "$MATRIX_LOCK" ]; then
+        lock_pid=$(sed -n 's/^pid=\([0-9][0-9]*\).*/\1/p' "$MATRIX_LOCK" 2>/dev/null)
+        if [ -n "$lock_pid" ] && kill -0 "$lock_pid" 2>/dev/null && tr '\0' ' ' < "/proc/$lock_pid/cmdline" 2>/dev/null | grep -q 'switch\.sh'; then
+            log "ERROR: another Matrix transition is already active"
+            return 1
+        fi
+        log "WARNING: removing stale transition lock (pid ${lock_pid:-unknown})"
+        rm -f "$MATRIX_LOCK"
+    fi
     if [ -e "$PAPER_SUPPRESS" ]; then log "ERROR: Paper maintenance session is active"; return 1; fi
     (set -C; : > "$MATRIX_LOCK") 2>/dev/null || { log "ERROR: cannot acquire transition lock"; return 1; }
     printf 'pid=%s started=%s\n' "$$" "$(date +%s)" > "$MATRIX_LOCK"
 }
 
+setting_or() {
+    case "$1" in null|"") echo "$2" ;; *) echo "$1" ;; esac
+}
+
 request_power_handoff() {
     local token request phase active snapshot ack started
-    phase=$(settings get global pico_power_coord_v2_phase 2>/dev/null)
-    active=$(settings get global pico_power_coord_sleep_active 2>/dev/null)
-    snapshot=$(settings get global pico_power_coord_snapshot_valid 2>/dev/null)
+    phase=$(setting_or "$(settings get global pico_power_coord_v2_phase 2>/dev/null)" "")
+    active=$(setting_or "$(settings get global pico_power_coord_sleep_active 2>/dev/null)" 0)
+    snapshot=$(setting_or "$(settings get global pico_power_coord_snapshot_valid 2>/dev/null)" 0)
     case "$phase:$active:$snapshot" in
         idle:0:0|:0:0) return 0 ;;
     esac
@@ -89,9 +120,9 @@ request_power_handoff() {
     log "Requested V-Sleep restoration before Matrix switch"
     started=$(date +%s)
     while :; do
-        phase=$(settings get global pico_power_coord_v2_phase 2>/dev/null)
-        active=$(settings get global pico_power_coord_sleep_active 2>/dev/null)
-        snapshot=$(settings get global pico_power_coord_snapshot_valid 2>/dev/null)
+        phase=$(setting_or "$(settings get global pico_power_coord_v2_phase 2>/dev/null)" "")
+        active=$(setting_or "$(settings get global pico_power_coord_sleep_active 2>/dev/null)" 0)
+        snapshot=$(setting_or "$(settings get global pico_power_coord_snapshot_valid 2>/dev/null)" 0)
         ack=$(settings get global pico_power_coord_v2_ack 2>/dev/null)
         if [ "$ack" = "$request" ] && [ "$phase" = idle ] && [ "$active" != 1 ] && [ "$snapshot" != 1 ]; then
             log "V-Sleep restoration acknowledged"
@@ -192,6 +223,7 @@ install_matrix() {
     [ "$current" = "$target" ] && { log "Already on $target region, no change needed."; return 0; }
 
     require_compatible_firmware || return 1
+    require_patched_framework || return 1
     begin_transition || return 1
     trap 'if [ "$(settings get global pico_matrix_coord_state 2>/dev/null)" = transitioning ]; then settings put global pico_matrix_coord_state idle 2>/dev/null; fi; end_transition; rm -f "$MATRIX_INTENT"' 0 1 2 3 15
     printf 'pid=%s target=%s started=%s\n' "$$" "$target" "$(date +%s)" > "$MATRIX_INTENT"
@@ -210,6 +242,9 @@ install_matrix() {
     installed_path=$(get_apk_path)
     installed_hash=$(sha256_file "$installed_path") || { log "ERROR: cannot verify installed Matrix APK"; return 1; }
     [ "$installed_hash" = "$payload_hash" ] || { log "ERROR: installed APK digest mismatch: got $installed_hash expected $payload_hash"; return 1; }
+    rm -f "$tmp"
+    rm -rf /data/data/com.bytedance.pico.matrix
+    log "Cleared stale Matrix application data"
     echo "region=$target" > "$STATE_FILE"
     settings put global pico_matrix_coord_generation "$(date +%s)" 2>/dev/null
     settings put global pico_matrix_coord_state reboot-required 2>/dev/null

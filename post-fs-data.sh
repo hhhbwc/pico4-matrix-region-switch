@@ -1,16 +1,16 @@
 #!/system/bin/sh
-# ==============================================
 # Pico4 Matrix Region Switcher - post-fs-data
-# 验证 Magisk magic mount 已正确覆盖 services.jar
-# 不需要 bind mount 回退，magic mount 在 zygote
-# 启动前已完成，比 bind mount 更早更可靠。
-# ==============================================
+# Selects the services.jar matching the running PICO OS and bind-mounts it.
+# If the OS is not in versions.conf, the stock services.jar is left untouched.
 
 MODDIR=${0%/*}
-EXPECTED_FINGERPRINT="Pico/Phoenix/PICOA8110:10/5.13.7/smartcm.1761755159:user/dev-keys"
-PATCHED_SERVICES_SHA256="d41ed85ae0769f7c4f12f568d68ea992ee80f3bef6ac669a1e0b905344af5df9"
-SYSTEM_JAR="/system/framework/services.jar"
-MOD_JAR="$MODDIR/system/framework/services.jar"
+[ "$MODDIR" = "." ] && MODDIR=$(pwd)
+case "$MODDIR" in .|"") MODDIR=/data/adb/modules/pico4_matrix_region_switch ;; esac
+
+LOG=/data/local/tmp/matrix_boot.log
+SYSTEM_JAR=/system/framework/services.jar
+
+log() { echo "[MatrixSwitch] $*" >> "$LOG"; }
 
 sha256_file() {
     local output digest
@@ -22,20 +22,49 @@ sha256_file() {
     echo "$digest"
 }
 
-if [ -f "$MOD_JAR" ]; then
-    fingerprint=$(getprop ro.build.fingerprint)
-    module_sha=$(sha256_file "$MOD_JAR")
-    current_sha=$(sha256_file "$SYSTEM_JAR")
-    if [ "$fingerprint" != "$EXPECTED_FINGERPRINT" ]; then
-        echo "[MatrixSwitch] WARNING: unsupported firmware fingerprint: $fingerprint"
-    elif [ "$module_sha" != "$PATCHED_SERVICES_SHA256" ]; then
-        echo "[MatrixSwitch] WARNING: module services.jar digest mismatch: $module_sha"
-    elif [ "$current_sha" = "$PATCHED_SERVICES_SHA256" ]; then
-        echo "[MatrixSwitch] services.jar patched via verified magic mount"
-    else
-        echo "[MatrixSwitch] WARNING: services.jar mismatch (expected $PATCHED_SERVICES_SHA256, got $current_sha)"
-        echo "[MatrixSwitch] Module may need reinstall or re-enable"
-    fi
+lookup_jar() {
+    local v h
+    while read -r v h; do
+        case "$v" in ''|'#'*) continue ;; esac
+        [ "$v" = "$1" ] && { echo "$h"; return 0; }
+    done < "$MODDIR/versions.conf"
+    return 1
+}
+
+mkdir -p /data/local/tmp
+echo "=== $(date) ===" > "$LOG"
+
+OS=$(getprop ro.build.display.id)
+JAR_SHA=$(lookup_jar "$OS") || {
+    log "unsupported PICO OS: $OS; leaving stock services.jar"
+    exit 0
+}
+SRC="$MODDIR/jars/$JAR_SHA.jar"
+[ -f "$SRC" ] || {
+    log "ERROR: missing jar for $OS: $SRC"
+    exit 0
+}
+
+current=$(sha256_file "$SYSTEM_JAR" 2>/dev/null) || current=
+if [ "$current" = "$JAR_SHA" ]; then
+    log "services.jar already matches $OS ($JAR_SHA); no bind needed"
+    exit 0
 fi
 
+chown 0:0 "$SRC" 2>/dev/null
+chmod 644 "$SRC" 2>/dev/null
+chcon u:object_r:system_framework_file:s0 "$SRC" 2>/dev/null || log "WARNING: chcon failed"
+
+if ! mount --bind "$SRC" "$SYSTEM_JAR"; then
+    log "ERROR: bind mount failed for $OS ($JAR_SHA)"
+    exit 0
+fi
+log "bound services.jar for $OS ($JAR_SHA)"
+
+digest=$(sha256_file "$SYSTEM_JAR")
+if [ "$digest" = "$JAR_SHA" ]; then
+    log "verified effective services.jar $digest"
+else
+    log "ERROR: effective services.jar $digest expected $JAR_SHA"
+fi
 exit 0
