@@ -6,7 +6,7 @@ Pico4 国区/外区 Matrix 一键切换 Magisk 模块。v1.9 起内置 PICO OS 5
 
 - 支持参考工具覆盖的 13 个 PICO OS 版本（5.2.7–5.13.7），按系统版本自动选择 `services.jar`，不需要在安装时手选。
 - `post-fs-data` 用 bind mount 覆盖 `services.jar`；遇到表中没有的系统版本就保持 stock jar，**不会因为挂载了不匹配的框架而开机异常**。
-- 5.11.0/5.12.0/5.13.3/5.13.7 共用一份“签名绕过 + `KeySetManagerService` 空指针守卫”的 jar（`2a13a5c4…`），与 `vd_pmsfix` 的框架修复一致。
+- 5.11.0/5.12.0/5.13.3/5.13.7 共用一份“签名绕过 + `KeySetManagerService` 空指针守卫”的 jar（`2a13a5c4…`）。
 - 保留 v1.8 的修复：无 power coordinator 时不再空等 30 秒、切换前校验生效 jar、回收 stale lock、切换成功后清理 Matrix 数据、删除临时 APK。
 
 ## 支持的系统版本
@@ -27,7 +27,7 @@ Pico4 国区/外区 Matrix 一键切换 Magisk 模块。v1.9 起内置 PICO OS 5
 ## 工作原理
 
 1. 模块安装时只验证当前系统版本在 `versions.conf` 中，并校验对应 `jars/<sha256>.jar` 的完整性；不会修改 `/system`。
-2. 每次开机 `post-fs-data.sh` 读取 `ro.build.display.id`，在 `versions.conf` 中查找匹配的 jar；如果当前生效的 `services.jar` 已经是目标哈希（例如 `vd_pmsfix` 已提供同一份），直接跳过；否则 `chcon u:object_r:system_framework_file:s0` 后 bind mount 到 `/system/framework/services.jar`。重复执行不会叠加挂载。
+2. 每次开机 `post-fs-data.sh` 读取 `ro.build.display.id`，在 `versions.conf` 中查找匹配的 jar；如果当前生效的 `services.jar` 已经是目标哈希，直接跳过；否则 `chcon u:object_r:system_framework_file:s0` 后 bind mount 到 `/system/framework/services.jar`。重复执行不会叠加挂载。
 3. `switch.sh` 在切换前再次核对该 OS 对应的期望哈希与实际生效的 `/system/framework/services.jar`；不一致就拒绝切换。
 4. 如果系统版本不在表中（例如 OTA 到了未适配版本），`post-fs-data` 不挂载任何 jar，设备使用 stock `services.jar` 正常启动；`switch.sh` 会报告 unsupported 并拒绝操作。
 
@@ -61,10 +61,6 @@ adb shell su -c "sh /data/adb/modules/pico4_matrix_region_switch/switch.sh gl"
 /data/adb/pico4_matrix_region_switch/cache/matrix_cn.apk
 /data/adb/pico4_matrix_region_switch/cache/matrix_gl.apk
 ```
-
-### 与 `vd_pmsfix` 共存
-
-`vd_pmsfix` 的 `services.jar` 就是本模块 5.11–5.13 组使用的那份 `2a13a5c4…`（签名绕过 + KeySet NPE 守卫）。5.13.7 上两者字节一致；矩阵模块的 bind mount 会覆盖为同一份文件，不会引入不同补丁。仍不建议再安装第三份不同哈希的 `services.jar` 覆盖模块。
 
 ## 文件结构
 
