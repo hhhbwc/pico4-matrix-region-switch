@@ -94,10 +94,16 @@ Pico4_MatrixRegionSwitch/
 
 ## 测试范围与限制
 
-- 8 份 jar 均来自 `P4_OS_527-OS_5110_OR_MAGISK_SU_MATRIX_PATCHER.zip`（该工具每个版本都做过测试）；我逐份校验了 SHA-256 和 ZIP 完整性。5.13.7 的合并版 jar 在本机完成过 CN→GL 切换、重启和 Matrix 运行验证；其他 OS 版本没有设备可实测，属于“沿用参考工具已验证的镜像 + 同一套挂载逻辑”。
+- 8 份 jar 均来自 `P4_OS_527-OS_5110_OR_MAGISK_SU_MATRIX_PATCHER.zip`（该工具每个版本都做过测试；原帖：https://phoenixplace.xyz/showthread.php?tid=3781 ）；我逐份校验了 SHA-256 和 ZIP 完整性。5.13.7 的合并版 jar 在本机完成过 CN→GL 切换、重启和 Matrix 运行验证；其他 OS 版本没有设备可实测，属于“沿用参考工具已验证的镜像 + 同一套挂载逻辑”。
 - 本机测试环境为 SELinux **Permissive**（`selinux_permissive` 模块）。Enforcing 下如果 Magisk 域不允许对 `/data` 文件 `chcon` 到 `system_framework_file`，bind 可能被拒绝；日志会写在 `/data/local/tmp/matrix_boot.log`。
 - 只支持上表版本；不要在未适配的系统上强行更换 `services.jar`。
 - 如果你在某个版本上发现异常，保留 `/data/local/tmp/matrix_boot.log` 和 `matrix_install.log` 再反馈。
+
+## 致谢
+
+- 各版本 `services.jar`、Matrix CN/GL APK 以及版本适配思路来自 PhoenixPlace 论坛的 Matrix Patcher 工具：
+  https://phoenixplace.xyz/showthread.php?tid=3781
+- `P4_OS_527-OS_5110_OR_MAGISK_SU_MATRIX_PATCHER.zip` 就是该原帖提供的工具包。感谢原作者的逐版本测试与分享；本模块只是把它的 per-OS 镜像接入 Magisk 的启动挂载流程。
 
 ## License
 
