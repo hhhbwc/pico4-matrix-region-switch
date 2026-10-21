@@ -1,6 +1,6 @@
 id=pico4_matrix_region_switch
 name=Pico4 Matrix Region Switcher
-version=v1.9.1
-versionCode=11
+version=v1.9.2
+versionCode=12
 author=Horizon
-description=国区↔外区 Matrix 切换；支持 PICO OS 5.2.7–5.13.7，按系统版本自动选择 services.jar；首次可用显式 cn/gl bootstrap。
+description=国区↔外区 Matrix 切换；快速识别 data/system Matrix 区域；支持 PICO OS 5.2.7–5.13.7 自动选择 services.jar。

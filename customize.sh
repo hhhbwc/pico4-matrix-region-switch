@@ -6,7 +6,7 @@ POSTFSDATA=true
 LATESTARTSERVICE=false
 
 ui_print "======================================"
-ui_print " Pico4 Matrix Region Switcher v1.9.1"
+ui_print " Pico4 Matrix Region Switcher v1.9.2"
 ui_print "======================================"
 MODDIR="$MODPATH"
 
@@ -51,6 +51,7 @@ ui_print "Detected PICO OS: $OS"
 ui_print "Selected services.jar: $JAR_SHA"
 ui_print "services.jar will be bind-mounted by post-fs-data after reboot"
 ui_print "Bundled per-OS jars: 5.2.7 - 5.13.7 (8 unique images)"
+ui_print "Region detected from APK zip entries (data first, system fallback)"
 ui_print "Matrix CN + GL APKs download on first switch"
 ui_print "Google Drive first, GitHub Releases fallback"
 ui_print "System-mounted arm64 HTTPS downloader and CA certificate"

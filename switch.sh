@@ -9,7 +9,6 @@ MODDIR=${0%/*}
 case "$MODDIR" in .|"") MODDIR=/data/adb/modules/pico4_matrix_region_switch ;; esac
 
 PKG="com.bytedance.pico.matrix"
-STATE_FILE="$MODDIR/region.prop"
 COORD_DIR="/data/adb/pico4-coord"
 MATRIX_LOCK="$COORD_DIR/matrix-switch.lock"
 PAPER_SUPPRESS="$COORD_DIR/paper-autostart.suppress"
@@ -38,20 +37,55 @@ sha256_file() {
     echo "$digest"
 }
 
-get_apk_path() {
+get_package_paths() {
+    pm path "$PKG" 2>/dev/null | sed -n 's/^package://p'
+}
+
+get_data_base_apk_path() {
     pm path "$PKG" 2>/dev/null | grep -o '/data/app/[^:]*/base.apk' | head -1
 }
 
-get_current_region() {
-    local path apk_hash
-    path=$(get_apk_path)
-    [ -n "$path" ] || { log "ERROR: Matrix APK path unavailable"; echo unknown; return; }
-    apk_hash=$(sha256_file "$path") || { log "ERROR: cannot hash installed Matrix APK"; echo unknown; return; }
-    case "$apk_hash" in
-        "$HASH_CN") echo cn ;;
-        "$HASH_GL") echo gl ;;
-        *) log "ERROR: unknown installed Matrix APK digest: $apk_hash"; echo unknown ;;
+# Reads ZIP central directories only; no APK extraction or 90 MB hashing.
+detect_apk_region_all() {
+    local path list cn=0 gl=0
+    while IFS= read -r path; do
+        [ -n "$path" ] || continue
+        [ -f "$path" ] || return 1
+        list=$(unzip -l "$path" 2>/dev/null) || return 1
+        case "$list" in
+            *libmetasec_ml*|*account_x_area_code*|*parental_ctrl_known_app_list*) cn=1 ;;
+        esac
+        case "$list" in
+            *libmetasec_ov*|*play-services-ads-identifier*|*play-services-basement*) gl=1 ;;
+        esac
+    done
+    case "$cn$gl" in
+        10) echo cn ;;
+        01) echo gl ;;
+        *) return 1 ;;
     esac
+}
+
+detect_current_region() {
+    local paths
+    REGION=""
+    REGION_SOURCE=""
+    paths=$(get_package_paths | grep '^/data/')
+    if [ -n "$paths" ]; then
+        REGION_SOURCE=data
+    else
+        paths=$(get_package_paths | grep '^/system/')
+        [ -n "$paths" ] || { log "ERROR: Matrix APK paths unavailable"; return 1; }
+        REGION_SOURCE=system
+    fi
+    REGION=$(printf '%s\n' "$paths" | detect_apk_region_all) || {
+        log "ERROR: Matrix APK region fingerprint is unrecognized"
+        return 1
+    }
+}
+
+get_current_region() {
+    detect_current_region && echo "$REGION" || echo unknown
 }
 
 require_root() {
@@ -230,13 +264,15 @@ ensure_cached() {
 }
 
 install_matrix() {
-    local target current payload_hash installed_path installed_hash tmp out
+    local target current source payload_hash installed_path installed_hash tmp out
     target="$2"
     region_values "$target" || { log "ERROR: invalid target region: $target"; return 1; }
-    current=$(get_current_region)
-    log "Current region: $current, target: $target"
+    if detect_current_region; then current=$REGION; source=$REGION_SOURCE; else current=unknown; source=none; fi
+    log "Current region: $current (source=$source), target: $target"
     case "$current" in cn|gl|unknown) ;; *) log "ERROR: cannot determine current region"; return 1 ;; esac
-    if [ "$current" = "unknown" ]; then
+    if [ "$source" = system ]; then
+        log "Only the stock system Matrix is present; installing the $target patched Matrix over it"
+    elif [ "$current" = "unknown" ]; then
         log "Current region is unknown; explicit target $target bootstraps the patched Matrix"
     elif [ "$current" = "$target" ]; then
         log "Already on $target region, no change needed."
@@ -260,13 +296,12 @@ install_matrix() {
     printf '%s\n' "$out" >> /data/local/tmp/matrix_install.log
     if ! printf '%s\n' "$out" | grep -qi success; then log "ERROR: Install failed: $out"; return 1; fi
 
-    installed_path=$(get_apk_path)
+    installed_path=$(get_data_base_apk_path)
     installed_hash=$(sha256_file "$installed_path") || { log "ERROR: cannot verify installed Matrix APK"; return 1; }
     [ "$installed_hash" = "$payload_hash" ] || { log "ERROR: installed APK digest mismatch: got $installed_hash expected $payload_hash"; return 1; }
     rm -f "$tmp"
     rm -rf /data/data/com.bytedance.pico.matrix
     log "Cleared stale Matrix application data"
-    echo "region=$target" > "$STATE_FILE"
     settings put global pico_matrix_coord_generation "$(date +%s)" 2>/dev/null
     settings put global pico_matrix_coord_state reboot-required 2>/dev/null
     log "SUCCESS: Switched to $target region; verified digest $installed_hash; reboot required before VR use"
@@ -274,13 +309,25 @@ install_matrix() {
 
 toggle_region() {
     local current target
-    current=$(get_current_region)
+    detect_current_region || return 1
+    current=$REGION
     case "$current" in cn) target=gl ;; gl) target=cn ;; *) log "ERROR: Cannot determine current region; refusing to default to CN"; return 1 ;; esac
     install_matrix "" "$target"
 }
 
 case "$1" in
-    status) echo "Current region: $(get_current_region)" ;;
+    status)
+        if detect_current_region; then
+            echo "Current region: $REGION"
+            echo "Matrix source: $REGION_SOURCE"
+            case "$REGION_SOURCE" in
+                data) echo "Patched Matrix: installed" ;;
+                system) echo "Patched Matrix: missing (run switch.sh cn or gl once)" ;;
+            esac
+        else
+            echo "Current region: unknown"
+        fi
+        ;;
     toggle) require_root && toggle_region ;;
     cn|gl) require_root && install_matrix '' "$1" ;;
     *) echo "Usage: sh $0 {status|toggle|cn|gl}"; exit 1 ;;
