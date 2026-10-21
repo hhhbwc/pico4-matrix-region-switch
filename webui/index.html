@@ -139,7 +139,7 @@ body {
 
 <div class="header">
   <h1>🌐 Matrix 区域切换</h1>
-  <p>Pico4 Matrix Region Switcher v1.9 · 支持 PICO OS 5.2.7–5.13.7</p>
+  <p>Pico4 Matrix Region Switcher v1.9.1 · 支持 PICO OS 5.2.7–5.13.7</p>
 </div>
 
 <div class="status-card">
@@ -187,14 +187,15 @@ function getStatus() {
   showMsg('正在检测当前区域...', 'info');
   Magisk.exec('su -c "sh ' + SWITCH + ' status 2>/dev/null"', function(code, stdout, stderr) {
     log('Status result: ' + stdout);
-    var region = 'unknown';
-    var tag = '无法检测';
-    if (stdout.indexOf('cn') >= 0) {
-      region = 'cn';
+    var match = stdout.match(/Current region:\s*(cn|gl|unknown)/);
+    var region = match ? match[1] : 'unknown';
+    var tag = '未安装补丁 Matrix，请先执行 switch.sh cn 或 gl';
+    if (region === 'cn') {
       tag = '🇨🇳 国区 Chinese';
-    } else if (stdout.indexOf('gl') >= 0) {
-      region = 'gl';
+    } else if (region === 'gl') {
       tag = '🌍 外区 Global';
+    } else {
+      region = 'unknown';
     }
     var el = document.getElementById('currentRegion');
     el.textContent = region === 'cn' ? '国区' : (region === 'gl' ? '外区' : '未知');

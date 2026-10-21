@@ -2,6 +2,12 @@
 
 Pico4 国区/外区 Matrix 一键切换 Magisk 模块。v1.9 起内置 PICO OS 5.2.7–5.13.7 的 8 份完整 `services.jar`，启动时按 `ro.build.display.id` 自动选择对应镜像并 bind 挂载到 `/system/framework/services.jar`；模块不再 magic mount 单个 jar。Matrix APK 仍按需下载，安装前用固定 SHA-256 校验。
 
+## v1.9.1 修复
+
+- 首次装机或恢复出厂后，`/data/app` 里没有补丁 Matrix，`status` 会是 `unknown`；v1.9 会连显式 `switch.sh cn|gl` 也拒绝。现在显式指定目标即可 bootstrap 安装补丁 Matrix，`toggle`/Action 仍会拒绝 unknown，避免瞎猜区域。
+- `status` 不再把 `[MatrixSwitch] ERROR...` 日志混进 `Current region:` 结果行（日志统一走 stderr）。
+- 新增 adb 可写的手动暂存导入：`adb push Matrix_CN.apk /data/local/tmp/matrix_cn.incoming.apk`，脚本会校验 SHA-256 后自动移入缓存；`matrix_gl.incoming.apk` 同理。
+
 ## v1.9 变更
 
 - 支持参考工具覆盖的 13 个 PICO OS 版本（5.2.7–5.13.7），按系统版本自动选择 `services.jar`，不需要在安装时手选。
@@ -51,11 +57,19 @@ adb shell su -c "sh /data/adb/modules/pico4_matrix_region_switch/switch.sh cn"
 adb shell su -c "sh /data/adb/modules/pico4_matrix_region_switch/switch.sh gl"
 ```
 
-首次切换某个区域会下载约 90 MB 的 APK（Google Drive 优先，GitHub Releases 备用），成功后需要重启，再启动 VR 应用。
+首次切换某个区域会下载约 90 MB 的 APK（Google Drive 优先，GitHub Releases 备用），成功后需要重启，再启动 VR 应用。若 `status` 返回 `unknown`（设备被重置或从未装过补丁 Matrix），先执行 `switch.sh cn` 或 `switch.sh gl` 做一次 bootstrap；之后 Action 按钮才能来回切换。
 
-### 手动缓存 APK
+### 手动暂存 / 缓存 APK
 
-将已验证的 APK 放入以下路径可跳过下载：
+推荐用 adb 可写的暂存路径，脚本会校验摘要并移入缓存：
+
+```bash
+adb push Matrix_CN.apk /data/local/tmp/matrix_cn.incoming.apk
+adb push Matrix_GL.apk /data/local/tmp/matrix_gl.incoming.apk
+adb shell su -c "sh /data/adb/modules/pico4_matrix_region_switch/switch.sh cn"
+```
+
+也可以直接放入缓存目录，但 `/data/adb` 不是 adb shell 可写目录，需要先 `adb push` 到 `/data/local/tmp`，再用 `su -c "cp ..."`：
 
 ```text
 /data/adb/pico4_matrix_region_switch/cache/matrix_cn.apk
@@ -85,7 +99,7 @@ Pico4_MatrixRegionSwitch/
 ## 构建
 
 ```bash
-7z a -tzip ../Pico4_MatrixRegionSwitch_v1.9.zip * .gitattributes
+7z a -tzip ../Pico4_MatrixRegionSwitch_v1.9.1.zip * .gitattributes
 ```
 
 ## 测试范围与限制

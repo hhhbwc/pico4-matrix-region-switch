@@ -6,7 +6,7 @@ POSTFSDATA=true
 LATESTARTSERVICE=false
 
 ui_print "======================================"
-ui_print " Pico4 Matrix Region Switcher v1.9"
+ui_print " Pico4 Matrix Region Switcher v1.9.1"
 ui_print "======================================"
 MODDIR="$MODPATH"
 
@@ -58,9 +58,9 @@ ui_print "Cache: /data/adb/pico4_matrix_region_switch/cache"
 ui_print "Requires GitHub access, ~250 MB for APKs, ~120 MB module space"
 ui_print ""
 ui_print "⚡ 切换区域:"
-ui_print "  打开 Magisk Manager → 模块"
-ui_print "  点击本模块右侧的 ⚡ 按钮"
-ui_print "  每次点击：国区 ↔ 外区 来回切换"
+ui_print "  已有补丁 Matrix：打开 Magisk Manager → 模块 → 点 ⚡ 来回切换"
+ui_print "  首次/重置后先执行：su -c 'sh /data/adb/modules/pico4_matrix_region_switch/switch.sh cn'（或 gl）"
+ui_print "  不想走网络：adb push Matrix_CN.apk /data/local/tmp/matrix_cn.incoming.apk"
 ui_print ""
 ui_print "📱 查看状态:"
 ui_print "  点击模块卡片上的 WebUI 按钮"

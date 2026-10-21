@@ -24,7 +24,7 @@ URL_GITHUB_GL="https://github.com/hhhbwc/pico4-matrix-region-switch/releases/dow
 HASH_CN="63fe1f78e1cef07861397c45e1fe7a01eb4d6dd4d2eef6e5f971237636cc78b8"
 HASH_GL="1f966e482f9341f05ae7668e58ec6cbb55b71271dd54892df96c0b2ce487a0ee"
 
-log() { echo "[MatrixSwitch] $*"; }
+log() { echo "[MatrixSwitch] $*" >&2; }
 
 sha256_file() {
     local path output digest
@@ -172,7 +172,7 @@ run_download() {
 }
 
 ensure_cached() {
-    local target cache part digest source url
+    local target cache part digest source url staged
     target="$1"
     region_values "$target" || return 1
     cache="$CACHE_DIR/matrix_${target}.apk"
@@ -186,6 +186,22 @@ ensure_cached() {
         return 0
     fi
     [ -e "$cache" ] && rm -f "$cache"
+
+    # adb cannot write /data/adb, so allow a shell-writable staging file.
+    staged="/data/local/tmp/matrix_${target}.incoming.apk"
+    if [ -f "$staged" ]; then
+        digest=$(sha256_file "$staged" 2>/dev/null)
+        if [ "$digest" = "$REGION_HASH" ]; then
+            if mv -f "$staged" "$cache" 2>/dev/null || { cp -f "$staged" "$cache" && rm -f "$staged"; }; then
+                CACHED_APK="$cache"
+                log "Imported verified $REGION_NAME Matrix APK from $staged"
+                return 0
+            fi
+            log "ERROR: cannot import staged APK: $staged"
+            return 1
+        fi
+        log "WARNING: ignoring staged APK with unexpected digest: $staged (${digest:-unreadable})"
+    fi
 
     for source in "Google Drive" "GitHub Releases"; do
         case "$source" in
@@ -219,8 +235,13 @@ install_matrix() {
     region_values "$target" || { log "ERROR: invalid target region: $target"; return 1; }
     current=$(get_current_region)
     log "Current region: $current, target: $target"
-    case "$current" in cn|gl) ;; *) log "ERROR: refusing to install with unknown current region"; return 1 ;; esac
-    [ "$current" = "$target" ] && { log "Already on $target region, no change needed."; return 0; }
+    case "$current" in cn|gl|unknown) ;; *) log "ERROR: cannot determine current region"; return 1 ;; esac
+    if [ "$current" = "unknown" ]; then
+        log "Current region is unknown; explicit target $target bootstraps the patched Matrix"
+    elif [ "$current" = "$target" ]; then
+        log "Already on $target region, no change needed."
+        return 0
+    fi
 
     require_compatible_firmware || return 1
     require_patched_framework || return 1
