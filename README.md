@@ -21,7 +21,7 @@ Patched Matrix: missing (run switch.sh cn or gl once)
 
 ## v1.9.1 修复
 
-- 首次装机或恢复出厂后，`/data/app` 里没有补丁 Matrix，`status` 会是 `unknown`；v1.9 会连显式 `switch.sh cn|gl` 也拒绝。现在显式指定目标即可 bootstrap 安装补丁 Matrix，`toggle`/Action 仍会拒绝 unknown，避免瞎猜区域。
+- 首次装机或恢复出厂后，`/data/app` 里没有补丁 Matrix，`status` 会是 `unknown`；v1.9 连显式 `switch.sh cn|gl` 也会拒绝。现在显式指定目标即可 bootstrap 安装补丁 Matrix，`toggle`/Action 仍会拒绝 unknown，避免瞎猜区域。
 - `status` 不再把 `[MatrixSwitch] ERROR...` 日志混进 `Current region:` 结果行（日志统一走 stderr）。
 - 新增 adb 可写的手动暂存导入：`adb push Matrix_CN.apk /data/local/tmp/matrix_cn.incoming.apk`，脚本会校验 SHA-256 后自动移入缓存；`matrix_gl.incoming.apk` 同理。
 
